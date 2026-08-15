@@ -1,8 +1,15 @@
 "use client";
 
-import { ChangeEvent, useEffect, useState } from "react";
+import {
+  ChangeEvent,
+  useEffect,
+  useState,
+} from "react";
+
 import Link from "next/link";
+
 import { useParams } from "next/navigation";
+
 import {
   ArrowLeft,
   Plus,
@@ -14,92 +21,189 @@ import {
   Upload,
   Save,
   Image as ImageIcon,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 
+
 type Question = {
   id: string;
+
   subject: string;
+
   question_text: string | null;
+
   question_image_url: string | null;
+
   options: string[];
+
   correct_answer: number;
+
   explanation: string | null;
+
   is_active: boolean;
+
   created_at: string;
 
-  // Only used for displaying private Storage images.
+  updated_at?: string;
+
   display_image_url?: string | null;
 };
+
 
 export default function SubjectQuestionsPage() {
   const params = useParams();
 
-  const subject = String(params.subject || "").toLowerCase();
+  const subject =
+    String(
+      params.subject || ""
+    ).toLowerCase();
 
-  const [loading, setLoading] = useState(true);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [error, setError] = useState("");
+  const supabase =
+    createClient();
+
 
   /*
-   * =========================
-   * ADD QUESTION STATE
-   * =========================
+   * ==================================================
+   * PAGE STATE
+   * ==================================================
    */
 
-  const [showAddQuestion, setShowAddQuestion] =
-    useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [questions, setQuestions] =
+    useState<Question[]>([]);
+
+  const [error, setError] =
+    useState("");
+
+
+  /*
+   * ==================================================
+   * ADD / EDIT MODAL
+   * ==================================================
+   */
+
+  const [
+    showQuestionModal,
+    setShowQuestionModal,
+  ] = useState(false);
+
+  const [
+    editingQuestion,
+    setEditingQuestion,
+  ] = useState<Question | null>(null);
 
   const [questionText, setQuestionText] =
     useState("");
 
-  const [options, setOptions] = useState([
-    "",
-    "",
-    "",
-    "",
-  ]);
+  const [options, setOptions] =
+    useState([
+      "",
+      "",
+      "",
+      "",
+    ]);
 
-  const [correctAnswer, setCorrectAnswer] =
-    useState(0);
+  const [
+    correctAnswer,
+    setCorrectAnswer,
+  ] = useState(0);
 
-  const [explanation, setExplanation] =
-    useState("");
+  const [
+    explanation,
+    setExplanation,
+  ] = useState("");
 
-  const [questionImage, setQuestionImage] =
-    useState<File | null>(null);
+  const [
+    questionImage,
+    setQuestionImage,
+  ] = useState<File | null>(null);
 
-  const [imagePreview, setImagePreview] =
-    useState<string | null>(null);
+  const [
+    imagePreview,
+    setImagePreview,
+  ] = useState<string | null>(null);
+
+  const [
+    removeExistingImage,
+    setRemoveExistingImage,
+  ] = useState(false);
 
   const [saving, setSaving] =
     useState(false);
 
-  const [formError, setFormError] =
-    useState("");
+  const [
+    formError,
+    setFormError,
+  ] = useState("");
 
-  const supabase = createClient();
 
   /*
-   * =========================
-   * DISPLAY SUBJECT NAME
-   * =========================
+   * ==================================================
+   * DELETE MODAL
+   * ==================================================
    */
 
-  const subjectName = subject
-    .split("-")
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() +
-        word.slice(1)
-    )
-    .join(" ");
+  const [
+    questionToDelete,
+    setQuestionToDelete,
+  ] = useState<Question | null>(null);
+
+  const [deleting, setDeleting] =
+    useState(false);
+
+  const [
+    deleteError,
+    setDeleteError,
+  ] = useState("");
+
 
   /*
-   * =========================
+   * ==================================================
+   * SUBJECT NAME
+   * ==================================================
+   */
+
+  const subjectName =
+    subject
+      .split("-")
+      .map(
+        (word) =>
+          word.charAt(0).toUpperCase() +
+          word.slice(1)
+      )
+      .join(" ");
+
+
+  /*
+   * ==================================================
+   * LOCAL IMAGE PREVIEW CLEANUP
+   * ==================================================
+   */
+
+  function revokeLocalPreview(
+    preview: string | null
+  ) {
+    if (
+      preview &&
+      preview.startsWith("blob:")
+    ) {
+      URL.revokeObjectURL(
+        preview
+      );
+    }
+  }
+
+
+  /*
+   * ==================================================
    * LOAD QUESTIONS
-   * =========================
+   * ==================================================
    */
 
   async function loadQuestions() {
@@ -108,31 +212,39 @@ export default function SubjectQuestionsPage() {
       setError("");
 
       /*
-       * Check logged-in user
+       * User
        */
 
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser();
+      } =
+        await supabase.auth.getUser();
 
       if (userError) {
         throw userError;
       }
 
       if (!user) {
-        setError("You are not logged in.");
+        setError(
+          "You are not logged in."
+        );
+
         return;
       }
 
+
       /*
-       * Check admin
+       * Admin
        */
 
       const {
         data: isAdmin,
         error: adminError,
-      } = await supabase.rpc("is_admin");
+      } =
+        await supabase.rpc(
+          "is_admin"
+        );
 
       if (adminError) {
         throw adminError;
@@ -146,84 +258,91 @@ export default function SubjectQuestionsPage() {
         return;
       }
 
+
       /*
-       * Load questions for current subject
+       * Questions
        */
 
       const {
         data,
         error: questionsError,
-      } = await supabase
-        .from("questions")
-        .select("*")
-        .eq("subject", subject)
-        .order("created_at", {
-          ascending: false,
-        });
+      } =
+        await supabase
+          .from("questions")
+          .select("*")
+          .eq(
+            "subject",
+            subject
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          );
 
       if (questionsError) {
         throw questionsError;
       }
 
+
       const loadedQuestions =
         (data ?? []) as Question[];
 
+
       /*
-       * =========================
-       * CREATE SIGNED IMAGE URLS
-       * =========================
-       *
-       * question-images is private.
-       *
-       * We store the Storage object path
-       * inside question_image_url.
-       *
-       * Example:
-       *
-       * anatomy/abc-question.png
-       *
-       * We DO NOT store a permanent public URL.
+       * Signed URLs
        */
 
       const questionsWithImages =
         await Promise.all(
           loadedQuestions.map(
             async (question) => {
+
               if (
                 !question.question_image_url
               ) {
                 return {
                   ...question,
-                  display_image_url: null,
+                  display_image_url:
+                    null,
                 };
               }
 
+
               /*
-               * Compatibility in case a full
-               * URL was ever stored previously.
+               * Compatibility with any old
+               * full URLs.
                */
 
               if (
-                question.question_image_url.startsWith(
-                  "http"
-                )
+                question.question_image_url
+                  .startsWith("http")
               ) {
                 return {
                   ...question,
+
                   display_image_url:
-                    question.question_image_url,
+                    question
+                      .question_image_url,
                 };
               }
+
 
               const {
                 data: signedData,
                 error: signedError,
-              } = await supabase.storage
-                .from("question-images")
-                .createSignedUrl(
-                  question.question_image_url,
-                  60 * 60 * 6
-                );
+              } =
+                await supabase.storage
+                  .from(
+                    "question-images"
+                  )
+                  .createSignedUrl(
+                    question
+                      .question_image_url,
+                    60 * 60 * 6
+                  );
+
 
               if (signedError) {
                 console.error(
@@ -233,12 +352,15 @@ export default function SubjectQuestionsPage() {
 
                 return {
                   ...question,
-                  display_image_url: null,
+                  display_image_url:
+                    null,
                 };
               }
 
+
               return {
                 ...question,
+
                 display_image_url:
                   signedData.signedUrl,
               };
@@ -246,9 +368,11 @@ export default function SubjectQuestionsPage() {
           )
         );
 
+
       setQuestions(
         questionsWithImages
       );
+
     } catch (err) {
       console.error(
         "Failed to load questions:",
@@ -258,78 +382,163 @@ export default function SubjectQuestionsPage() {
       setError(
         `Unable to load ${subjectName} questions.`
       );
+
     } finally {
       setLoading(false);
     }
   }
 
+
   useEffect(() => {
     if (subject) {
       loadQuestions();
     }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
 
+
   /*
-   * =========================
-   * OPEN ADD QUESTION
-   * =========================
+   * ==================================================
+   * OPEN ADD
+   * ==================================================
    */
 
   function openAddQuestion() {
+    revokeLocalPreview(
+      imagePreview
+    );
+
+    setEditingQuestion(null);
+
     setQuestionText("");
-    setOptions(["", "", "", ""]);
+
+    setOptions([
+      "",
+      "",
+      "",
+      "",
+    ]);
+
     setCorrectAnswer(0);
+
     setExplanation("");
+
     setQuestionImage(null);
+
     setImagePreview(null);
+
+    setRemoveExistingImage(false);
+
     setFormError("");
-    setShowAddQuestion(true);
+
+    setShowQuestionModal(true);
   }
 
+
   /*
-   * =========================
-   * CLOSE ADD QUESTION
-   * =========================
+   * ==================================================
+   * OPEN EDIT
+   * ==================================================
    */
 
-  function closeAddQuestion() {
+  function openEditQuestion(
+    question: Question
+  ) {
+    revokeLocalPreview(
+      imagePreview
+    );
+
+    setEditingQuestion(
+      question
+    );
+
+    setQuestionText(
+      question.question_text || ""
+    );
+
+    setOptions(
+      [...question.options]
+    );
+
+    setCorrectAnswer(
+      question.correct_answer
+    );
+
+    setExplanation(
+      question.explanation || ""
+    );
+
+    setQuestionImage(null);
+
+    setImagePreview(
+      question.display_image_url ||
+        null
+    );
+
+    setRemoveExistingImage(false);
+
+    setFormError("");
+
+    setShowQuestionModal(true);
+  }
+
+
+  /*
+   * ==================================================
+   * CLOSE ADD / EDIT
+   * ==================================================
+   */
+
+  function closeQuestionModal() {
     if (saving) {
       return;
     }
 
-    if (imagePreview) {
-      URL.revokeObjectURL(
-        imagePreview
-      );
-    }
+    revokeLocalPreview(
+      imagePreview
+    );
 
-    setShowAddQuestion(false);
+    setShowQuestionModal(false);
+
+    setEditingQuestion(null);
+
+    setQuestionImage(null);
+
     setImagePreview(null);
+
+    setRemoveExistingImage(false);
+
+    setFormError("");
   }
 
+
   /*
-   * =========================
-   * OPTION CHANGE
-   * =========================
+   * ==================================================
+   * OPTION
+   * ==================================================
    */
 
   function updateOption(
     index: number,
     value: string
   ) {
-    setOptions((current) =>
-      current.map((option, i) =>
-        i === index
-          ? value
-          : option
-      )
+    setOptions(
+      (current) =>
+        current.map(
+          (option, i) =>
+            i === index
+              ? value
+              : option
+        )
     );
   }
 
+
   /*
-   * =========================
-   * IMAGE SELECTION
-   * =========================
+   * ==================================================
+   * IMAGE
+   * ==================================================
    */
 
   function handleImageChange(
@@ -342,12 +551,11 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
-    /*
-     * Basic image validation
-     */
 
     if (
-      !file.type.startsWith("image/")
+      !file.type.startsWith(
+        "image/"
+      )
     ) {
       setFormError(
         "Please select a valid image file."
@@ -356,9 +564,6 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
-    /*
-     * 10 MB limit
-     */
 
     if (
       file.size >
@@ -371,24 +576,88 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
-    if (imagePreview) {
-      URL.revokeObjectURL(
-        imagePreview
-      );
-    }
+
+    revokeLocalPreview(
+      imagePreview
+    );
+
 
     const preview =
-      URL.createObjectURL(file);
+      URL.createObjectURL(
+        file
+      );
 
-    setQuestionImage(file);
-    setImagePreview(preview);
+
+    setQuestionImage(
+      file
+    );
+
+    setImagePreview(
+      preview
+    );
+
+    setRemoveExistingImage(false);
+
     setFormError("");
   }
 
+
+  function removeImage() {
+    revokeLocalPreview(
+      imagePreview
+    );
+
+    setQuestionImage(null);
+
+    setImagePreview(null);
+
+    /*
+     * Only meaningful during Edit.
+     */
+
+    if (editingQuestion) {
+      setRemoveExistingImage(
+        true
+      );
+    }
+  }
+
+
   /*
-   * =========================
-   * SAVE QUESTION
-   * =========================
+   * ==================================================
+   * ACTIVE SESSION CHECK
+   * ==================================================
+   */
+
+  async function questionIsLocked(
+    questionId: string
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "is_question_in_active_session",
+        {
+          p_question_id:
+            questionId,
+        }
+      );
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    return data === true;
+  }
+
+
+  /*
+   * ==================================================
+   * SAVE ADD / EDIT
+   * ==================================================
    */
 
   async function saveQuestion() {
@@ -396,19 +665,38 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
+
     setFormError("");
 
+
     /*
-     * Question can be:
-     *
-     * text only
-     * image only
-     * text + image
+     * Determine whether an image will
+     * still exist after saving.
+     */
+
+    const keepingExistingImage =
+      Boolean(
+        editingQuestion
+          ?.question_image_url
+      ) &&
+      !removeExistingImage &&
+      !questionImage;
+
+
+    const hasImageAfterSave =
+      Boolean(
+        questionImage
+      ) ||
+      keepingExistingImage;
+
+
+    /*
+     * Text or image required.
      */
 
     if (
       !questionText.trim() &&
-      !questionImage
+      !hasImageAfterSave
     ) {
       setFormError(
         "Add question text, a question image, or both."
@@ -417,18 +705,22 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
+
     /*
-     * All 4 options are required.
+     * Options
      */
 
     const cleanedOptions =
-      options.map((option) =>
-        option.trim()
+      options.map(
+        (option) =>
+          option.trim()
       );
+
 
     if (
       cleanedOptions.some(
-        (option) => !option
+        (option) =>
+          !option
       )
     ) {
       setFormError(
@@ -438,25 +730,29 @@ export default function SubjectQuestionsPage() {
       return;
     }
 
+
     setSaving(true);
+
 
     let uploadedImagePath:
       | string
       | null = null;
 
+
     try {
+
       /*
-       * =========================
-       * VERIFY ADMIN AGAIN
-       * =========================
+       * Recheck admin.
        */
 
       const {
         data: isAdmin,
         error: adminError,
-      } = await supabase.rpc(
-        "is_admin"
-      );
+      } =
+        await supabase.rpc(
+          "is_admin"
+        );
+
 
       if (
         adminError ||
@@ -467,10 +763,29 @@ export default function SubjectQuestionsPage() {
         );
       }
 
+
       /*
-       * =========================
-       * UPLOAD QUESTION IMAGE
-       * =========================
+       * During Edit, protect students
+       * currently using this question.
+       */
+
+      if (editingQuestion) {
+        const locked =
+          await questionIsLocked(
+            editingQuestion.id
+          );
+
+
+        if (locked) {
+          throw new Error(
+            "This question is currently being used in an active test session. Edit it after the session has finished or expired."
+          );
+        }
+      }
+
+
+      /*
+       * Upload new image if selected.
        */
 
       if (questionImage) {
@@ -481,99 +796,273 @@ export default function SubjectQuestionsPage() {
             ?.toLowerCase() ||
           "png";
 
+
         const fileName =
           `${crypto.randomUUID()}.${extension}`;
+
 
         uploadedImagePath =
           `${subject}/${fileName}`;
 
+
         const {
           error: uploadError,
-        } = await supabase.storage
-          .from("question-images")
-          .upload(
-            uploadedImagePath,
-            questionImage,
-            {
-              cacheControl: "3600",
-              upsert: false,
-            }
-          );
+        } =
+          await supabase.storage
+            .from(
+              "question-images"
+            )
+            .upload(
+              uploadedImagePath,
+              questionImage,
+              {
+                cacheControl:
+                  "3600",
+
+                upsert:
+                  false,
+              }
+            );
+
 
         if (uploadError) {
           throw uploadError;
         }
       }
 
+
       /*
-       * =========================
-       * INSERT QUESTION
-       * =========================
+       * ==================================================
+       * ADD
+       * ==================================================
        */
 
-      const {
-        error: insertError,
-      } = await supabase
-        .from("questions")
-        .insert({
-          subject,
-          question_text:
-            questionText.trim() ||
-            null,
+      if (!editingQuestion) {
+
+        const {
+          error: insertError,
+        } =
+          await supabase
+            .from("questions")
+            .insert({
+              subject,
+
+              question_text:
+                questionText.trim() ||
+                null,
+
+              question_image_url:
+                uploadedImagePath,
+
+              options:
+                cleanedOptions,
+
+              correct_answer:
+                correctAnswer,
+
+              explanation:
+                explanation.trim() ||
+                null,
+
+              is_active:
+                true,
+            });
+
+
+        if (insertError) {
 
           /*
-           * Store private Storage PATH,
-           * not public URL.
+           * Remove orphan upload.
            */
 
-          question_image_url:
-            uploadedImagePath,
+          if (
+            uploadedImagePath
+          ) {
+            await supabase.storage
+              .from(
+                "question-images"
+              )
+              .remove([
+                uploadedImagePath,
+              ]);
+          }
 
-          options:
-            cleanedOptions,
-
-          correct_answer:
-            correctAnswer,
-
-          explanation:
-            explanation.trim() ||
-            null,
-
-          is_active: true,
-        });
-
-      if (insertError) {
-        /*
-         * If DB insert fails after
-         * upload, remove orphan image.
-         */
-
-        if (uploadedImagePath) {
-          await supabase.storage
-            .from("question-images")
-            .remove([
-              uploadedImagePath,
-            ]);
+          throw insertError;
         }
-
-        throw insertError;
       }
+
 
       /*
-       * =========================
-       * SUCCESS
-       * =========================
+       * ==================================================
+       * EDIT
+       * ==================================================
        */
 
-      if (imagePreview) {
-        URL.revokeObjectURL(
-          imagePreview
-        );
+      else {
+
+        const oldImagePath =
+          editingQuestion
+            .question_image_url;
+
+
+        let finalImagePath:
+          | string
+          | null =
+          oldImagePath;
+
+
+        if (
+          removeExistingImage
+        ) {
+          finalImagePath =
+            null;
+        }
+
+
+        if (
+          uploadedImagePath
+        ) {
+          finalImagePath =
+            uploadedImagePath;
+        }
+
+
+        const {
+          error: updateError,
+        } =
+          await supabase
+            .from("questions")
+            .update({
+              question_text:
+                questionText.trim() ||
+                null,
+
+              question_image_url:
+                finalImagePath,
+
+              options:
+                cleanedOptions,
+
+              correct_answer:
+                correctAnswer,
+
+              explanation:
+                explanation.trim() ||
+                null,
+
+              updated_at:
+                new Date()
+                  .toISOString(),
+            })
+            .eq(
+              "id",
+              editingQuestion.id
+            );
+
+
+        if (updateError) {
+
+          /*
+           * DB failed after new upload.
+           * Remove new orphan file.
+           */
+
+          if (
+            uploadedImagePath
+          ) {
+            await supabase.storage
+              .from(
+                "question-images"
+              )
+              .remove([
+                uploadedImagePath,
+              ]);
+          }
+
+          throw updateError;
+        }
+
+
+        /*
+         * Database update succeeded.
+         *
+         * Now remove old Storage image
+         * if it was replaced or removed.
+         */
+
+        const shouldDeleteOldImage =
+          Boolean(
+            oldImagePath
+          ) &&
+          !oldImagePath?.startsWith(
+            "http"
+          ) &&
+          (
+            removeExistingImage ||
+            Boolean(
+              uploadedImagePath
+            )
+          ) &&
+          oldImagePath !==
+            finalImagePath;
+
+
+        if (
+          shouldDeleteOldImage &&
+          oldImagePath
+        ) {
+          const {
+            error:
+              oldImageDeleteError,
+          } =
+            await supabase.storage
+              .from(
+                "question-images"
+              )
+              .remove([
+                oldImagePath,
+              ]);
+
+
+          /*
+           * Question itself is already
+           * safely updated. Storage cleanup
+           * failure should not undo it.
+           */
+
+          if (
+            oldImageDeleteError
+          ) {
+            console.warn(
+              "Question updated, but old image could not be removed:",
+              oldImageDeleteError
+            );
+          }
+        }
       }
 
-      setShowAddQuestion(false);
+
+      /*
+       * ==================================================
+       * SUCCESS
+       * ==================================================
+       */
+
+      revokeLocalPreview(
+        imagePreview
+      );
+
+
+      setShowQuestionModal(
+        false
+      );
+
+      setEditingQuestion(
+        null
+      );
 
       setQuestionText("");
+
       setOptions([
         "",
         "",
@@ -582,13 +1071,17 @@ export default function SubjectQuestionsPage() {
       ]);
 
       setCorrectAnswer(0);
+
       setExplanation("");
+
       setQuestionImage(null);
+
       setImagePreview(null);
 
-      /*
-       * Reload pool immediately.
-       */
+      setRemoveExistingImage(
+        false
+      );
+
 
       await loadQuestions();
 
@@ -598,20 +1091,203 @@ export default function SubjectQuestionsPage() {
         err
       );
 
+
       setFormError(
         err instanceof Error
           ? err.message
           : "Unable to save question."
       );
+
     } finally {
       setSaving(false);
     }
   }
 
+
   /*
-   * =========================
+   * ==================================================
+   * OPEN DELETE
+   * ==================================================
+   */
+
+  function openDeleteQuestion(
+    question: Question
+  ) {
+    setDeleteError("");
+
+    setQuestionToDelete(
+      question
+    );
+  }
+
+
+  function closeDeleteQuestion() {
+    if (deleting) {
+      return;
+    }
+
+    setQuestionToDelete(
+      null
+    );
+
+    setDeleteError("");
+  }
+
+
+  /*
+   * ==================================================
+   * DELETE QUESTION
+   * ==================================================
+   */
+
+  async function deleteQuestion() {
+    if (
+      !questionToDelete ||
+      deleting
+    ) {
+      return;
+    }
+
+
+    setDeleting(true);
+
+    setDeleteError("");
+
+
+    try {
+
+      /*
+       * Admin
+       */
+
+      const {
+        data: isAdmin,
+        error: adminError,
+      } =
+        await supabase.rpc(
+          "is_admin"
+        );
+
+
+      if (
+        adminError ||
+        isAdmin !== true
+      ) {
+        throw new Error(
+          "Admin authorization failed."
+        );
+      }
+
+
+      /*
+       * Active session protection
+       */
+
+      const locked =
+        await questionIsLocked(
+          questionToDelete.id
+        );
+
+
+      if (locked) {
+        throw new Error(
+          "This question is currently being used in an active test session. Delete it after that session has finished or expired."
+        );
+      }
+
+
+      const imagePath =
+        questionToDelete
+          .question_image_url;
+
+
+      /*
+       * Delete DB row first.
+       *
+       * user_question_history is
+       * automatically removed by CASCADE.
+       */
+
+      const {
+        error: deleteDbError,
+      } =
+        await supabase
+          .from("questions")
+          .delete()
+          .eq(
+            "id",
+            questionToDelete.id
+          );
+
+
+      if (deleteDbError) {
+        throw deleteDbError;
+      }
+
+
+      /*
+       * Remove Storage image after
+       * successful DB deletion.
+       */
+
+      if (
+        imagePath &&
+        !imagePath.startsWith(
+          "http"
+        )
+      ) {
+        const {
+          error:
+            imageDeleteError,
+        } =
+          await supabase.storage
+            .from(
+              "question-images"
+            )
+            .remove([
+              imagePath,
+            ]);
+
+
+        if (imageDeleteError) {
+          console.warn(
+            "Question deleted, but image cleanup failed:",
+            imageDeleteError
+          );
+        }
+      }
+
+
+      setQuestionToDelete(
+        null
+      );
+
+
+      await loadQuestions();
+
+    } catch (err) {
+      console.error(
+        "Failed to delete question:",
+        err
+      );
+
+
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete question."
+      );
+
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+
+  /*
+   * ==================================================
    * LOADING
-   * =========================
+   * ==================================================
    */
 
   if (loading) {
@@ -633,10 +1309,11 @@ export default function SubjectQuestionsPage() {
     );
   }
 
+
   /*
-   * =========================
+   * ==================================================
    * ERROR
-   * =========================
+   * ==================================================
    */
 
   if (error) {
@@ -665,11 +1342,15 @@ export default function SubjectQuestionsPage() {
             />
 
             <h1 className="mt-5 text-xl font-bold text-slate-900">
+
               Unable to access Question Bank
+
             </h1>
 
             <p className="mt-2 text-sm text-slate-500">
+
               {error}
+
             </p>
 
           </div>
@@ -680,19 +1361,20 @@ export default function SubjectQuestionsPage() {
     );
   }
 
+
   /*
-   * =========================
-   * MAIN PAGE
-   * =========================
+   * ==================================================
+   * MAIN
+   * ==================================================
    */
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
 
 
-      {/* =========================
+      {/* ==================================================
           HEADER
-      ========================== */}
+      ================================================== */}
 
       <header className="border-b border-slate-200 bg-white">
 
@@ -724,11 +1406,15 @@ export default function SubjectQuestionsPage() {
               <div>
 
                 <h1 className="text-xl font-bold">
+
                   {subjectName} Question Pool
+
                 </h1>
 
                 <p className="text-sm text-slate-400">
+
                   Manage all {subjectName} questions
+
                 </p>
 
               </div>
@@ -737,8 +1423,6 @@ export default function SubjectQuestionsPage() {
 
           </div>
 
-
-          {/* Add Question */}
 
           <button
             type="button"
@@ -757,21 +1441,16 @@ export default function SubjectQuestionsPage() {
       </header>
 
 
-      {/* =========================
+      {/* ==================================================
           CONTENT
-      ========================== */}
+      ================================================== */}
 
       <section className="mx-auto max-w-6xl px-6 py-10">
 
 
-        {/* =========================
-            STATISTICS
-        ========================== */}
+        {/* Statistics */}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2">
-
-
-          {/* Total */}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 
@@ -786,8 +1465,6 @@ export default function SubjectQuestionsPage() {
           </div>
 
 
-          {/* Active */}
-
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
 
             <p className="text-sm text-slate-400">
@@ -795,12 +1472,14 @@ export default function SubjectQuestionsPage() {
             </p>
 
             <p className="mt-2 text-3xl font-bold text-emerald-600">
+
               {
                 questions.filter(
                   (question) =>
                     question.is_active
                 ).length
               }
+
             </p>
 
           </div>
@@ -808,9 +1487,9 @@ export default function SubjectQuestionsPage() {
         </div>
 
 
-        {/* =========================
+        {/* ==================================================
             QUESTION LIST
-        ========================== */}
+        ================================================== */}
 
         {questions.length === 0 ? (
 
@@ -822,17 +1501,17 @@ export default function SubjectQuestionsPage() {
 
             </div>
 
-
             <h2 className="mt-5 text-lg font-semibold">
+
               No {subjectName} questions yet
+
             </h2>
 
-
             <p className="mt-2 text-sm text-slate-500">
-              Add your first {subjectName} question
-              to start building the question pool.
-            </p>
 
+              Add your first {subjectName} question to start building the question pool.
+
+            </p>
 
             <button
               type="button"
@@ -853,19 +1532,22 @@ export default function SubjectQuestionsPage() {
           <div className="space-y-4">
 
             {questions.map(
-              (question, index) => (
+              (
+                question,
+                index
+              ) => (
 
                 <article
                   key={question.id}
                   className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                 >
 
-                  <div className="flex items-start justify-between gap-4">
+                  {/* Top row */}
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
 
                     <div className="min-w-0 flex-1">
-
-
-                      {/* Number + Status */}
 
                       <div className="flex items-center gap-3">
 
@@ -896,121 +1578,165 @@ export default function SubjectQuestionsPage() {
 
                       </div>
 
-
-                      {/* Question Text */}
-
-                      {question.question_text && (
-
-                        <p className="mt-4 text-sm font-medium leading-6 text-slate-800">
-
-                          {question.question_text}
-
-                        </p>
-
-                      )}
+                    </div>
 
 
-                      {/* Question Image */}
+                    {/* Actions */}
 
-                      {question.display_image_url && (
+                    <div className="flex shrink-0 items-center gap-2">
 
-                        <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openEditQuestion(
+                            question
+                          )
+                        }
+                        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      >
 
-                          <img
-                            src={
-                              question.display_image_url
-                            }
-                            alt="Question"
-                            className="max-h-96 max-w-full rounded-xl border border-slate-200 object-contain"
-                          />
+                        <Pencil size={15} />
 
-                        </div>
+                        Edit
 
-                      )}
-
-
-                      {/* Options */}
-
-                      <div className="mt-5 grid gap-2 sm:grid-cols-2">
-
-                        {question.options.map(
-                          (
-                            option,
-                            optionIndex
-                          ) => {
-
-                            const isCorrect =
-                              optionIndex ===
-                              question.correct_answer;
-
-                            return (
-
-                              <div
-                                key={optionIndex}
-                                className={`rounded-lg border px-4 py-3 text-sm ${
-                                  isCorrect
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-200 bg-slate-50 text-slate-600"
-                                }`}
-                              >
-
-                                <span className="mr-2 font-semibold">
-
-                                  {String.fromCharCode(
-                                    65 +
-                                      optionIndex
-                                  )}
-                                  .
-
-                                </span>
-
-                                {option}
-
-                                {isCorrect && (
-
-                                  <span className="ml-2 text-xs font-semibold">
-
-                                    ✓ Correct
-
-                                  </span>
-
-                                )}
-
-                              </div>
-
-                            );
-
-                          }
-                        )}
-
-                      </div>
+                      </button>
 
 
-                      {/* Explanation */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openDeleteQuestion(
+                            question
+                          )
+                        }
+                        className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-500 transition hover:bg-red-50"
+                      >
 
-                      {question.explanation && (
+                        <Trash2 size={15} />
 
-                        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                        Delete
 
-                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
-
-                            Explanation
-
-                          </p>
-
-                          <p className="mt-2 text-sm leading-6 text-slate-600">
-
-                            {question.explanation}
-
-                          </p>
-
-                        </div>
-
-                      )}
+                      </button>
 
                     </div>
 
                   </div>
+
+
+                  {/* Question Text */}
+
+                  {question.question_text && (
+
+                    <p className="mt-4 text-sm font-medium leading-6 text-slate-800">
+
+                      {question.question_text}
+
+                    </p>
+
+                  )}
+
+
+                  {/* Image */}
+
+                  {question.display_image_url && (
+
+                    <div className="mt-4">
+
+                      <img
+                        src={
+                          question.display_image_url
+                        }
+                        alt="Question"
+                        className="max-h-96 max-w-full rounded-xl border border-slate-200 object-contain"
+                      />
+
+                    </div>
+
+                  )}
+
+
+                  {/* Options */}
+
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+
+                    {question.options.map(
+                      (
+                        option,
+                        optionIndex
+                      ) => {
+
+                        const isCorrect =
+                          optionIndex ===
+                          question.correct_answer;
+
+
+                        return (
+
+                          <div
+                            key={
+                              optionIndex
+                            }
+                            className={`rounded-lg border px-4 py-3 text-sm ${
+                              isCorrect
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                            }`}
+                          >
+
+                            <span className="mr-2 font-semibold">
+
+                              {String.fromCharCode(
+                                65 +
+                                  optionIndex
+                              )}
+                              .
+
+                            </span>
+
+                            {option}
+
+
+                            {isCorrect && (
+
+                              <span className="ml-2 text-xs font-semibold">
+
+                                ✓ Correct
+
+                              </span>
+
+                            )}
+
+                          </div>
+
+                        );
+
+                      }
+                    )}
+
+                  </div>
+
+
+                  {/* Explanation */}
+
+                  {question.explanation && (
+
+                    <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+
+                        Explanation
+
+                      </p>
+
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">
+
+                        {question.explanation}
+
+                      </p>
+
+                    </div>
+
+                  )}
 
                 </article>
 
@@ -1024,18 +1750,18 @@ export default function SubjectQuestionsPage() {
       </section>
 
 
-      {/* =========================
-          ADD QUESTION MODAL
-      ========================== */}
+      {/* ==================================================
+          ADD / EDIT MODAL
+      ================================================== */}
 
-      {showAddQuestion && (
+      {showQuestionModal && (
 
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 px-4 py-8">
 
           <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl">
 
 
-            {/* Modal Header */}
+            {/* Header */}
 
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
 
@@ -1046,7 +1772,11 @@ export default function SubjectQuestionsPage() {
                 </p>
 
                 <h2 className="mt-1 text-xl font-bold">
-                  Add Question
+
+                  {editingQuestion
+                    ? "Edit Question"
+                    : "Add Question"}
+
                 </h2>
 
               </div>
@@ -1054,8 +1784,12 @@ export default function SubjectQuestionsPage() {
 
               <button
                 type="button"
-                onClick={closeAddQuestion}
-                disabled={saving}
+                onClick={
+                  closeQuestionModal
+                }
+                disabled={
+                  saving
+                }
                 className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
               >
 
@@ -1066,16 +1800,14 @@ export default function SubjectQuestionsPage() {
             </div>
 
 
-            {/* Modal Content */}
+            {/* Content */}
 
             <div className="space-y-7 p-6">
 
 
-              {/* Form Error */}
-
               {formError && (
 
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-600">
 
                   {formError}
 
@@ -1084,7 +1816,7 @@ export default function SubjectQuestionsPage() {
               )}
 
 
-              {/* Question Text */}
+              {/* Text */}
 
               <div>
 
@@ -1093,14 +1825,21 @@ export default function SubjectQuestionsPage() {
                   Question Text
 
                   <span className="ml-2 font-normal text-slate-400">
+
                     Optional if using image
+
                   </span>
 
                 </label>
 
+
                 <textarea
-                  value={questionText}
-                  onChange={(event) =>
+                  value={
+                    questionText
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setQuestionText(
                       event.target.value
                     )
@@ -1113,7 +1852,7 @@ export default function SubjectQuestionsPage() {
               </div>
 
 
-              {/* Question Image */}
+              {/* Image */}
 
               <div>
 
@@ -1122,7 +1861,9 @@ export default function SubjectQuestionsPage() {
                   Question Image
 
                   <span className="ml-2 font-normal text-slate-400">
+
                     Optional
+
                   </span>
 
                 </label>
@@ -1132,8 +1873,8 @@ export default function SubjectQuestionsPage() {
 
                   <Upload size={19} />
 
-                  {questionImage
-                    ? "Change Image"
+                  {imagePreview
+                    ? "Replace Image"
                     : "Upload Question Image"}
 
                   <input
@@ -1163,16 +1904,38 @@ export default function SubjectQuestionsPage() {
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
 
-                    <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <div className="mb-3 flex items-center justify-between gap-4">
 
-                      <ImageIcon size={15} />
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
 
-                      Image Preview
+                        <ImageIcon size={15} />
+
+                        Image Preview
+
+                      </div>
+
+
+                      <button
+                        type="button"
+                        onClick={
+                          removeImage
+                        }
+                        className="flex items-center gap-1.5 text-xs font-semibold text-red-500 transition hover:text-red-600"
+                      >
+
+                        <Trash2 size={14} />
+
+                        Remove Image
+
+                      </button>
 
                     </div>
 
+
                     <img
-                      src={imagePreview}
+                      src={
+                        imagePreview
+                      }
                       alt="Question preview"
                       className="max-h-96 max-w-full rounded-lg object-contain"
                     />
@@ -1180,6 +1943,19 @@ export default function SubjectQuestionsPage() {
                   </div>
 
                 )}
+
+
+                {editingQuestion &&
+                  removeExistingImage &&
+                  !questionImage && (
+
+                    <p className="mt-3 text-xs font-medium text-amber-600">
+
+                      Existing image will be removed when you save.
+
+                    </p>
+
+                  )}
 
               </div>
 
@@ -1191,11 +1967,15 @@ export default function SubjectQuestionsPage() {
                 <div className="mb-3">
 
                   <h3 className="text-sm font-semibold text-slate-700">
+
                     Answer Options
+
                   </h3>
 
                   <p className="mt-1 text-xs text-slate-400">
+
                     Enter all four options and choose the correct answer.
+
                   </p>
 
                 </div>
@@ -1220,8 +2000,6 @@ export default function SubjectQuestionsPage() {
                       >
 
 
-                        {/* Correct Answer Radio */}
-
                         <input
                           type="radio"
                           name="correctAnswer"
@@ -1238,8 +2016,6 @@ export default function SubjectQuestionsPage() {
                         />
 
 
-                        {/* Letter */}
-
                         <div
                           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
                             correctAnswer ===
@@ -1250,24 +2026,24 @@ export default function SubjectQuestionsPage() {
                         >
 
                           {String.fromCharCode(
-                            65 + index
+                            65 +
+                              index
                           )}
 
                         </div>
 
 
-                        {/* Option */}
-
                         <input
                           type="text"
-                          value={option}
+                          value={
+                            option
+                          }
                           onChange={(
                             event
                           ) =>
                             updateOption(
                               index,
-                              event.target
-                                .value
+                              event.target.value
                             )
                           }
                           placeholder={`Option ${String.fromCharCode(
@@ -1312,14 +2088,21 @@ export default function SubjectQuestionsPage() {
                   Explanation
 
                   <span className="ml-2 font-normal text-slate-400">
+
                     Optional
+
                   </span>
 
                 </label>
 
+
                 <textarea
-                  value={explanation}
-                  onChange={(event) =>
+                  value={
+                    explanation
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setExplanation(
                       event.target.value
                     )
@@ -1334,14 +2117,18 @@ export default function SubjectQuestionsPage() {
             </div>
 
 
-            {/* Modal Footer */}
+            {/* Footer */}
 
             <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-5">
 
               <button
                 type="button"
-                onClick={closeAddQuestion}
-                disabled={saving}
+                onClick={
+                  closeQuestionModal
+                }
+                disabled={
+                  saving
+                }
                 className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
               >
 
@@ -1352,32 +2139,154 @@ export default function SubjectQuestionsPage() {
 
               <button
                 type="button"
-                onClick={saveQuestion}
-                disabled={saving}
+                onClick={
+                  saveQuestion
+                }
+                disabled={
+                  saving
+                }
                 className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
 
                 {saving ? (
 
                   <>
-
                     <Loader2
                       size={17}
                       className="animate-spin"
                     />
 
-                    Saving...
-
+                    {editingQuestion
+                      ? "Updating..."
+                      : "Saving..."}
                   </>
 
                 ) : (
 
                   <>
-
                     <Save size={17} />
 
-                    Save Question
+                    {editingQuestion
+                      ? "Update Question"
+                      : "Save Question"}
+                  </>
 
+                )}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* ==================================================
+          DELETE CONFIRMATION
+      ================================================== */}
+
+      {questionToDelete && (
+
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 px-4">
+
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-500">
+
+              <AlertTriangle size={24} />
+
+            </div>
+
+
+            <h2 className="mt-5 text-xl font-bold text-slate-900">
+
+              Delete Question?
+
+            </h2>
+
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+
+              This will permanently delete the question from the question pool.
+
+              {questionToDelete.question_image_url
+                ? " Its stored image will also be removed."
+                : ""}
+
+            </p>
+
+
+            {questionToDelete.question_text && (
+
+              <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+
+                {questionToDelete.question_text}
+
+              </div>
+
+            )}
+
+
+            {deleteError && (
+
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-600">
+
+                {deleteError}
+
+              </div>
+
+            )}
+
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <button
+                type="button"
+                onClick={
+                  closeDeleteQuestion
+                }
+                disabled={
+                  deleting
+                }
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+
+                Cancel
+
+              </button>
+
+
+              <button
+                type="button"
+                onClick={
+                  deleteQuestion
+                }
+                disabled={
+                  deleting
+                }
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+
+                {deleting ? (
+
+                  <>
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                    />
+
+                    Deleting...
+                  </>
+
+                ) : (
+
+                  <>
+                    <Trash2 size={16} />
+
+                    Delete Permanently
                   </>
 
                 )}
