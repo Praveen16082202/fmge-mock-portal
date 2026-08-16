@@ -1,66 +1,156 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import {
+  NextResponse,
+  type NextRequest,
+} from "next/server";
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+export async function updateSession(
+  request: NextRequest
+) {
+  let supabaseResponse =
+    NextResponse.next({
+      request,
+    });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
+  const supabase =
+    createServerClient(
+      process.env
+        .NEXT_PUBLIC_SUPABASE_URL!,
+      process.env
+        .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(
+              ({
+                name,
+                value,
+              }) => {
+                request.cookies.set(
+                  name,
+                  value
+                );
+              }
+            );
+
+            supabaseResponse =
+              NextResponse.next({
+                request,
+              });
+
+            cookiesToSet.forEach(
+              ({
+                name,
+                value,
+                options,
+              }) => {
+                supabaseResponse.cookies.set(
+                  name,
+                  value,
+                  options
+                );
+              }
+            );
+          },
         },
-
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
-
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-
-          cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
+      }
+    );
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } =
+    await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
+  const pathname =
+    request.nextUrl.pathname;
+
+  /*
+   * =========================================
+   * PUBLIC ROUTES
+   * =========================================
+   *
+   * These pages must be accessible
+   * without being logged in.
+   */
 
   const isPublicPage =
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname ===
+      "/forgot-password" ||
+    pathname ===
+      "/reset-password" ||
     pathname.startsWith("/auth");
 
-  if (!user && !isPublicPage) {
-    const url = request.nextUrl.clone();
 
-    url.pathname = "/login";
+  /*
+   * =========================================
+   * NOT LOGGED IN
+   * =========================================
+   *
+   * Redirect protected routes
+   * to login.
+   */
 
-    return NextResponse.redirect(url);
+  if (
+    !user &&
+    !isPublicPage
+  ) {
+    const url =
+      request.nextUrl.clone();
+
+    url.pathname =
+      "/login";
+
+    return NextResponse.redirect(
+      url
+    );
   }
+
+
+  /*
+   * =========================================
+   * LOGGED-IN USER
+   * =========================================
+   *
+   * If already signed in, do not
+   * show login/signup again.
+   *
+   * IMPORTANT:
+   *
+   * We intentionally DO NOT redirect
+   * /reset-password here.
+   *
+   * Supabase recovery links create a
+   * temporary authenticated recovery
+   * session, so the user must still be
+   * allowed to stay on /reset-password.
+   */
 
   if (
     user &&
-    (pathname === "/login" || pathname === "/signup")
+    (
+      pathname === "/login" ||
+      pathname === "/signup" ||
+      pathname ===
+        "/forgot-password"
+    )
   ) {
-    const url = request.nextUrl.clone();
+    const url =
+      request.nextUrl.clone();
 
-    url.pathname = "/dashboard";
+    url.pathname =
+      "/dashboard";
 
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(
+      url
+    );
   }
+
 
   return supabaseResponse;
 }
