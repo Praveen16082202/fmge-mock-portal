@@ -51,7 +51,6 @@ export default function ForgotPasswordPage() {
     const supabase =
       createClient();
 
-
     try {
 
       /*
@@ -59,26 +58,23 @@ export default function ForgotPasswordPage() {
        * RESET REDIRECT URL
        * =====================================
        *
-       * Local development:
-       *
+       * Local:
        * http://localhost:3000/reset-password
        *
-       *
        * Production:
-       *
-       * https://fmge-mock-portalv2.vercel.app/reset-password
+       * https://fmge-prep-delta.vercel.app/reset-password
        */
 
       const redirectTo =
         process.env.NODE_ENV ===
         "production"
-          ? "https://fmge-mock-portalv2.vercel.app/reset-password"
+          ? "https://fmge-prep-delta.vercel.app/reset-password"
           : "http://localhost:3000/reset-password";
 
 
       /*
        * =====================================
-       * SEND EMAIL
+       * SEND RESET EMAIL
        * =====================================
        */
 
@@ -99,10 +95,6 @@ export default function ForgotPasswordPage() {
       }
 
 
-      /*
-       * Success
-       */
-
       setSent(true);
 
     } catch (err: unknown) {
@@ -122,13 +114,10 @@ export default function ForgotPasswordPage() {
           };
 
 
-        if (
-          authError.message
-        ) {
+        if (authError.message) {
           message =
             authError.message;
         }
-
       }
 
 
@@ -154,9 +143,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
 
 
-        {/* =====================================
-            LOGO
-        ====================================== */}
+        {/* Logo */}
 
         <div className="mb-8 text-center">
 
@@ -169,7 +156,6 @@ export default function ForgotPasswordPage() {
 
           </h1>
 
-
           <p className="mt-1 text-sm text-slate-400">
 
             Mock Test Portal
@@ -179,9 +165,7 @@ export default function ForgotPasswordPage() {
         </div>
 
 
-        {/* =====================================
-            CARD
-        ====================================== */}
+        {/* Card */}
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
@@ -189,9 +173,9 @@ export default function ForgotPasswordPage() {
           {sent ? (
 
             /*
-             * =================================
-             * EMAIL SENT SCREEN
-             * =================================
+             * ===============================
+             * EMAIL SENT
+             * ===============================
              */
 
             <div className="text-center">
@@ -254,9 +238,9 @@ export default function ForgotPasswordPage() {
           ) : (
 
             /*
-             * =================================
-             * FORGOT PASSWORD FORM
-             * =================================
+             * ===============================
+             * RESET REQUEST
+             * ===============================
              */
 
             <>
@@ -315,8 +299,6 @@ export default function ForgotPasswordPage() {
               >
 
 
-                {/* Email */}
-
                 <div>
 
                   <label
@@ -332,9 +314,7 @@ export default function ForgotPasswordPage() {
                   <input
                     id="email"
                     type="email"
-                    value={
-                      email
-                    }
+                    value={email}
                     onChange={(
                       event
                     ) =>
@@ -350,8 +330,6 @@ export default function ForgotPasswordPage() {
 
                 </div>
 
-
-                {/* Submit */}
 
                 <button
                   type="submit"
@@ -384,8 +362,6 @@ export default function ForgotPasswordPage() {
 
               </form>
 
-
-              {/* Back */}
 
               <Link
                 href="/login"
