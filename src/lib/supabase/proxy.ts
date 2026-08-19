@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
+
 import {
   NextResponse,
   type NextRequest,
 } from "next/server";
+
 
 export async function updateSession(
   request: NextRequest
@@ -12,6 +14,7 @@ export async function updateSession(
       request,
     });
 
+
   const supabase =
     createServerClient(
       process.env
@@ -20,27 +23,34 @@ export async function updateSession(
         .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
       {
         cookies: {
+
           getAll() {
             return request.cookies.getAll();
           },
 
+
           setAll(cookiesToSet) {
+
             cookiesToSet.forEach(
               ({
                 name,
                 value,
               }) => {
+
                 request.cookies.set(
                   name,
                   value
                 );
+
               }
             );
+
 
             supabaseResponse =
               NextResponse.next({
                 request,
               });
+
 
             cookiesToSet.forEach(
               ({
@@ -48,42 +58,51 @@ export async function updateSession(
                 value,
                 options,
               }) => {
+
                 supabaseResponse.cookies.set(
                   name,
                   value,
                   options
                 );
+
               }
             );
+
           },
+
         },
       }
     );
+
+
+  /*
+   * =========================================
+   * CURRENT USER
+   * =========================================
+   */
 
   const {
     data: { user },
   } =
     await supabase.auth.getUser();
 
+
   const pathname =
     request.nextUrl.pathname;
+
 
   /*
    * =========================================
    * PUBLIC ROUTES
    * =========================================
-   *
-   * These pages must be accessible
-   * without being logged in.
    */
 
   const isPublicPage =
     pathname === "/login" ||
     pathname === "/signup" ||
-    pathname ===
-      "/forgot-password" ||
-    pathname ===
-      "/reset-password" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname === "/account-suspended" ||
     pathname.startsWith("/auth");
 
 
@@ -91,15 +110,13 @@ export async function updateSession(
    * =========================================
    * NOT LOGGED IN
    * =========================================
-   *
-   * Redirect protected routes
-   * to login.
    */
 
   if (
     !user &&
     !isPublicPage
   ) {
+
     const url =
       request.nextUrl.clone();
 
@@ -109,26 +126,195 @@ export async function updateSession(
     return NextResponse.redirect(
       url
     );
+
   }
 
 
   /*
    * =========================================
-   * LOGGED-IN USER
+   * LOGGED-IN USER ACCESS STATUS
+   * =========================================
+   */
+
+  let accessStatus:
+    | string
+    | null = null;
+
+
+  if (user) {
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "get_my_access_status"
+      );
+
+
+    if (error) {
+
+      console.error(
+        "Unable to check account status:",
+        error
+      );
+
+
+      /*
+       * Fail closed.
+       *
+       * If we cannot determine whether
+       * the account should have access,
+       * don't allow protected routes.
+       */
+
+      if (
+        !isPublicPage
+      ) {
+
+        const url =
+          request.nextUrl.clone();
+
+        url.pathname =
+          "/login";
+
+        return NextResponse.redirect(
+          url
+        );
+
+      }
+
+    } else {
+
+      accessStatus =
+        data;
+
+    }
+
+  }
+
+
+  /*
+   * =========================================
+   * SUSPENDED STUDENT
    * =========================================
    *
-   * If already signed in, do not
-   * show login/signup again.
+   * Suspended students are sent to one
+   * dedicated page.
    *
-   * IMPORTANT:
+   * They cannot access:
    *
-   * We intentionally DO NOT redirect
-   * /reset-password here.
+   * dashboard
+   * subjects
+   * tests
+   * attempts
+   * performance
+   * admin
+   * etc.
+   */
+
+  if (
+    user &&
+    accessStatus ===
+      "suspended" &&
+    pathname !==
+      "/account-suspended"
+  ) {
+
+    const url =
+      request.nextUrl.clone();
+
+    url.pathname =
+      "/account-suspended";
+
+    return NextResponse.redirect(
+      url
+    );
+
+  }
+
+
+  /*
+   * =========================================
+   * INVALID / BLOCKED ACCOUNT
+   * =========================================
+   */
+
+  if (
+    user &&
+    accessStatus ===
+      "blocked" &&
+    pathname !==
+      "/account-suspended"
+  ) {
+
+    const url =
+      request.nextUrl.clone();
+
+    url.pathname =
+      "/account-suspended";
+
+    return NextResponse.redirect(
+      url
+    );
+
+  }
+
+
+  /*
+   * =========================================
+   * ACTIVE / ADMIN USER VISITING
+   * SUSPENDED PAGE
+   * =========================================
+   */
+
+  if (
+    user &&
+    (
+      accessStatus === "active" ||
+      accessStatus === "admin"
+    ) &&
+    pathname ===
+      "/account-suspended"
+  ) {
+
+    const url =
+      request.nextUrl.clone();
+
+
+    if (
+      accessStatus ===
+        "admin"
+    ) {
+
+      url.pathname =
+        "/admin";
+
+    } else {
+
+      url.pathname =
+        "/dashboard";
+
+    }
+
+
+    return NextResponse.redirect(
+      url
+    );
+
+  }
+
+
+  /*
+   * =========================================
+   * LOGGED-IN USER VISITING AUTH PAGES
+   * =========================================
    *
-   * Supabase recovery links create a
-   * temporary authenticated recovery
-   * session, so the user must still be
-   * allowed to stay on /reset-password.
+   * Do NOT redirect /reset-password.
+   *
+   * Password recovery creates a temporary
+   * authenticated session and the user must
+   * remain on /reset-password.
    */
 
   if (
@@ -136,19 +322,44 @@ export async function updateSession(
     (
       pathname === "/login" ||
       pathname === "/signup" ||
-      pathname ===
-        "/forgot-password"
+      pathname === "/forgot-password"
     )
   ) {
+
     const url =
       request.nextUrl.clone();
 
-    url.pathname =
-      "/dashboard";
+
+    if (
+      accessStatus ===
+        "admin"
+    ) {
+
+      url.pathname =
+        "/admin";
+
+    } else if (
+      accessStatus ===
+        "suspended" ||
+      accessStatus ===
+        "blocked"
+    ) {
+
+      url.pathname =
+        "/account-suspended";
+
+    } else {
+
+      url.pathname =
+        "/dashboard";
+
+    }
+
 
     return NextResponse.redirect(
       url
     );
+
   }
 
 

@@ -1,93 +1,361 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import {
+  FormEvent,
+  useState,
+} from "react";
+
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { LogIn, Loader2 } from "lucide-react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
+import {
+  createClient,
+} from "@/lib/supabase/client";
+
+import {
+  LogIn,
+  Loader2,
+} from "lucide-react";
+
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  /*
+   * =========================================
+   * STATE
+   * =========================================
+   */
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  const [
+    loginIdentifier,
+    setLoginIdentifier,
+  ] = useState("");
+
+  const [
+    password,
+    setPassword,
+  ] = useState("");
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+
+  /*
+   * =========================================
+   * LOGIN
+   * =========================================
+   */
+
+  async function handleLogin(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setError("");
     setLoading(true);
 
-    const supabase = createClient();
+    const supabase =
+      createClient();
+
 
     try {
-      /*
-       * =========================
-       * SIGN IN
-       * =========================
-       */
 
-      const { error: loginError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      const input =
+        loginIdentifier
+          .trim();
 
-      if (loginError) {
-        setError(loginError.message);
+
+      if (!input) {
+        setError(
+          "Enter your email or Student ID."
+        );
+
         return;
       }
 
 
       /*
-       * =========================
-       * CHECK ADMIN STATUS
-       * =========================
+       * =====================================
+       * DETERMINE LOGIN TYPE
+       * =====================================
        *
-       * is_admin() checks whether
-       * the logged-in user's UUID
-       * exists in public.admin_users.
+       * Email:
+       *
+       * student@gmail.com
+       *
+       *
+       * Student ID:
+       *
+       * FMGE1
+       * FMGE01
+       * FMGE001
+       * FMGE0001
        */
 
-      const { data: isAdmin, error: adminError } =
-        await supabase.rpc("is_admin");
+      let loginEmail =
+        input;
+
+
+      const isStudentId =
+        /^FMGE\d{1,4}$/i.test(
+          input
+        );
 
 
       /*
-       * If admin check fails, don't
-       * prevent a normal user from
-       * entering the student dashboard.
+       * =====================================
+       * STUDENT ID → EMAIL
+       * =====================================
        */
 
+      if (isStudentId) {
+
+        const {
+          data:
+            resolvedEmail,
+
+          error:
+            lookupError,
+        } =
+          await supabase.rpc(
+            "get_email_for_student_login",
+            {
+              p_student_id:
+                input,
+            }
+          );
+
+
+        if (
+          lookupError
+        ) {
+
+          console.error(
+            "Student ID lookup failed:",
+            lookupError
+          );
+
+          setError(
+            "Unable to sign in. Please try again."
+          );
+
+          return;
+        }
+
+
+        if (
+          !resolvedEmail
+        ) {
+
+          setError(
+            "Invalid Student ID or password."
+          );
+
+          return;
+        }
+
+
+        loginEmail =
+          resolvedEmail;
+
+      }
+
+
+      /*
+       * =====================================
+       * EMAIL VALIDATION
+       * =====================================
+       */
+
+      else if (
+        !input.includes("@")
+      ) {
+
+        setError(
+          "Enter a valid email address or Student ID."
+        );
+
+        return;
+
+      }
+
+
+      /*
+       * =====================================
+       * SUPABASE SIGN IN
+       * =====================================
+       */
+
+      const {
+        error:
+          loginError,
+      } =
+        await supabase.auth
+          .signInWithPassword({
+            email:
+              loginEmail,
+
+            password,
+          });
+
+
+      if (loginError) {
+
+        /*
+         * Keep message generic.
+         *
+         * This avoids revealing whether
+         * an email or Student ID exists.
+         */
+
+        setError(
+          "Invalid email/Student ID or password."
+        );
+
+        return;
+      }
+
+
+      /*
+       * =====================================
+       * CHECK ADMIN
+       * =====================================
+       */
+
+      const {
+        data: isAdmin,
+
+        error:
+          adminError,
+      } =
+        await supabase.rpc(
+          "is_admin"
+        );
+
+
       if (adminError) {
+
         console.error(
           "Admin check failed:",
           adminError
         );
 
-        router.push("/dashboard");
+        /*
+         * Proxy will perform the
+         * final account-status check.
+         */
+
+        router.push(
+          "/dashboard"
+        );
+
         router.refresh();
+
         return;
       }
 
 
       /*
-       * =========================
-       * REDIRECT
-       * =========================
-       *
-       * Admin  → /admin
-       * Student → /dashboard
+       * =====================================
+       * ADMIN
+       * =====================================
        */
 
-      if (isAdmin === true) {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
+      if (
+        isAdmin === true
+      ) {
+
+        router.push(
+          "/admin"
+        );
+
+        router.refresh();
+
+        return;
       }
+
+
+      /*
+       * =====================================
+       * STUDENT ACCESS STATUS
+       * =====================================
+       */
+
+      const {
+        data:
+          accessStatus,
+
+        error:
+          accessError,
+      } =
+        await supabase.rpc(
+          "get_my_access_status"
+        );
+
+
+      if (accessError) {
+
+        console.error(
+          "Access status check failed:",
+          accessError
+        );
+
+        /*
+         * Proxy still provides
+         * server-side enforcement.
+         */
+
+        router.push(
+          "/dashboard"
+        );
+
+        router.refresh();
+
+        return;
+      }
+
+
+      /*
+       * Suspended / blocked
+       */
+
+      if (
+        accessStatus ===
+          "suspended" ||
+        accessStatus ===
+          "blocked"
+      ) {
+
+        router.push(
+          "/account-suspended"
+        );
+
+        router.refresh();
+
+        return;
+      }
+
+
+      /*
+       * Active student
+       */
+
+      router.push(
+        "/dashboard"
+      );
 
       router.refresh();
 
@@ -109,21 +377,38 @@ export default function LoginPage() {
     }
   }
 
+
+  /*
+   * =========================================
+   * PAGE
+   * =========================================
+   */
+
   return (
+
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
 
       <div className="w-full max-w-md">
+
 
         {/* Logo */}
 
         <div className="mb-8 text-center">
 
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            FMGE<span className="text-blue-600">Prep</span>
+
+            FMGE
+            <span className="text-blue-600">
+              Prep
+            </span>
+
           </h1>
 
+
           <p className="mt-1 text-sm text-slate-400">
+
             Mock Test Portal
+
           </p>
 
         </div>
@@ -133,18 +418,29 @@ export default function LoginPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 
+
           <div className="mb-6">
 
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <LogIn size={21} />
+
+              <LogIn
+                size={21}
+              />
+
             </div>
 
+
             <h2 className="mt-5 text-2xl font-bold text-slate-900">
+
               Welcome back
+
             </h2>
 
+
             <p className="mt-2 text-sm text-slate-500">
-              Sign in to continue your FMGE preparation.
+
+              Sign in using your email address or FMGE Student ID.
+
             </p>
 
           </div>
@@ -153,41 +449,73 @@ export default function LoginPage() {
           {/* Error */}
 
           {error && (
+
             <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+
               {error}
+
             </div>
+
           )}
 
 
           {/* Form */}
 
           <form
-            onSubmit={handleLogin}
+            onSubmit={
+              handleLogin
+            }
             className="space-y-5"
           >
 
-            {/* Email */}
+
+            {/* Email / Student ID */}
 
             <div>
 
               <label
-                htmlFor="email"
+                htmlFor="loginIdentifier"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
-                Email
+
+                Email or Student ID
+
               </label>
 
+
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) =>
-                  setEmail(event.target.value)
+                id="loginIdentifier"
+                type="text"
+                value={
+                  loginIdentifier
                 }
-                placeholder="you@example.com"
+                onChange={(
+                  event
+                ) =>
+                  setLoginIdentifier(
+                    event.target.value
+                  )
+                }
+                placeholder="you@example.com or FMGE0001"
                 required
+                autoComplete="username"
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
+
+
+              <p className="mt-2 text-xs text-slate-400">
+
+                Students can use their FMGE Student ID, for example{" "}
+
+                <span className="font-mono font-semibold text-slate-500">
+
+                  FMGE0001
+
+                </span>
+
+                .
+
+              </p>
 
             </div>
 
@@ -200,51 +528,77 @@ export default function LoginPage() {
                 htmlFor="password"
                 className="mb-2 block text-sm font-medium text-slate-700"
               >
+
                 Password
+
               </label>
+
 
               <input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
+                value={
+                  password
+                }
+                onChange={(
+                  event
+                ) =>
+                  setPassword(
+                    event.target.value
+                  )
                 }
                 placeholder="Enter your password"
                 required
+                autoComplete="current-password"
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
 
             </div>
 
+
+            {/* Forgot Password */}
+
             <div className="flex justify-end">
-  <Link
-    href="/forgot-password"
-    className="text-sm font-semibold text-blue-600 hover:text-blue-700"
-  >
-    Forgot password?
-  </Link>
-</div>
+
+              <Link
+                href="/forgot-password"
+                className="text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+              >
+
+                Forgot password?
+
+              </Link>
+
+            </div>
 
 
-            {/* Login Button */}
+            {/* Login */}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={
+                loading
+              }
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
 
               {loading ? (
+
                 <>
+
                   <Loader2
                     size={18}
                     className="animate-spin"
                   />
+
                   Signing in...
+
                 </>
+
               ) : (
+
                 "Sign In"
+
               )}
 
             </button>
@@ -256,13 +610,15 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-slate-500">
 
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
 
             <Link
               href="/signup"
-              className="font-semibold text-blue-600 hover:text-blue-700"
+              className="font-semibold text-blue-600 transition hover:text-blue-700"
             >
+
               Create one
+
             </Link>
 
           </p>
@@ -273,11 +629,14 @@ export default function LoginPage() {
         {/* Footer */}
 
         <p className="mt-6 text-center text-xs text-slate-400">
+
           FMGE Prep • Mock Test Portal
+
         </p>
 
       </div>
 
     </main>
+
   );
 }
