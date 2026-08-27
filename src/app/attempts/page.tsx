@@ -482,7 +482,7 @@ export default function AttemptsPage() {
         ========================== */}
 
         <footer className="mt-12 border-t border-slate-200 pt-6 text-center text-xs text-slate-400">
-          FMGE Prep • Mock Test Portal
+          FMGE Prep • Mock Test Portal • GP Techs
         </footer>
 
       </main>

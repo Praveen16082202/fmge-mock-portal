@@ -18,6 +18,8 @@ import {
 import {
   LogIn,
   Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 
@@ -41,6 +43,11 @@ export default function LoginPage() {
     password,
     setPassword,
   ] = useState("");
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
   const [
     error,
@@ -70,7 +77,6 @@ export default function LoginPage() {
     const supabase =
       createClient();
 
-
     try {
 
       const input =
@@ -95,7 +101,6 @@ export default function LoginPage() {
        * Email:
        *
        * student@gmail.com
-       *
        *
        * Student ID:
        *
@@ -534,24 +539,72 @@ export default function LoginPage() {
               </label>
 
 
-              <input
-                id="password"
-                type="password"
-                value={
-                  password
-                }
-                onChange={(
-                  event
-                ) =>
-                  setPassword(
-                    event.target.value
-                  )
-                }
-                placeholder="Enter your password"
-                required
-                autoComplete="current-password"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
+              <div className="relative">
+
+                <input
+                  id="password"
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={
+                    password
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setPassword(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Enter your password"
+                  required
+                  autoComplete="current-password"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+
+
+                {/* Show / Hide Password */}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword(
+                      (current) =>
+                        !current
+                    )
+                  }
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  title={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-400 transition hover:text-slate-600 focus:outline-none"
+                >
+
+                  {showPassword ? (
+
+                    <EyeOff
+                      size={19}
+                    />
+
+                  ) : (
+
+                    <Eye
+                      size={19}
+                    />
+
+                  )}
+
+                </button>
+
+              </div>
 
             </div>
 
@@ -630,7 +683,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-xs text-slate-400">
 
-          FMGE Prep • Mock Test Portal
+          FMGE Prep • Mock Test Portal • GP Techs
 
         </p>
 

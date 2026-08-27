@@ -501,7 +501,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-xs text-slate-400">
 
-          FMGE Prep • Mock Test Portal
+          FMGE Prep • Mock Test Portal • GP Techs
 
         </p>
 
